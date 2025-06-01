@@ -6,10 +6,28 @@
 </head>
 <body>
     
+    <div id="form-section">
+        <form id="learn-form">
+            <h3>See  a new Image!</h3>
+            <input type="text" id="search-term" placeholder="Optional Search">
+            <button type="submit">Learn About a new image</button>
+        </form>
+        <label class="switch">
+            <input type="checkbox" id="toggle-detail-checkbox">
+            <span class="slider round"></span>
+        </label>
+        <span id="info-toggle">Show Artist Detail</span>
+
+        
+    </div>
+        <div id="form-response" style="display: none;">
+            <p>Keep exploring to discover more amazing artworks.</p>
+        </div>
+    </div>
+
     <div id="data-container">
     <h1 id="art_title"></h1> 
-    <p id='descript'></p>
-
+   <div id = 'descript'></div> 
        </div>
     <div id="img">
         <img id="image" />
