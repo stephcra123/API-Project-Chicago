@@ -11,6 +11,6 @@ Download all of the files and open the index.html in your browser!
 ## Features
 
 Explore the artwork by:
-- Seeing random images
+- See random art pieces
+- Learn about the artist using the navigation
 - Use the optional search (Elasticsearch) to find things you are curious about
-- Learn about the artist by clicking the toggle
