@@ -1,64 +1,74 @@
+//get a random number between 1 and size
 function getNewImageNum(size = 10000) {
-  let artwork_num = Math.round(Math.random() * size);
-  return artwork_num;
+  return Math.round(Math.random() * size);
 }
 
+//needs to be global as id is used in both the reload and update display function to ensure artist data matches artist
 let currentArtworkData = null;
 
-function reloadInfo(rand_image, searchTerm, retryCount = 0) {
-  const searchParam = searchTerm ? `${encodeURIComponent(searchTerm)}` : '';
-  return fetch(`https://api.artic.edu/api/v1/artworks/search?&q=${searchParam}&fields=image_id,title,description,id&limit=1&page=${rand_image}&has_image=true`)
-    .then(response => {
-      if (!response.ok) {
-        if (response.status === 403 && retryCount < 5) {
-          const newRandImage = getNewImageNum(size = (10000 / ((retryCount + 1) * 10)));
-          console.log(retryCount);
-          return reloadInfo(newRandImage, searchTerm, retryCount + 1);
-        }
-        throw new Error('Request failed');
-      }
-      return response.json();
-    })
-    .then(data => {
-      const artworks = data.data;
-      if (!artworks || artworks.length === 0) {
-        if (retryCount < 5) {
-          const newRandImage = getNewImageNum(size = (10000 / ((retryCount + 1) * 10)));
-          return reloadInfo(newRandImage, searchTerm, retryCount + 1);
-        } else {
-          throw new Error('No artwork found after multiple attempts');
-        }
-      }
+//use async so that the loops don't overlap when there is a error
+async function reloadInfo(rand_image, searchTerm, retryCount = 0) {
+  const searchParam = searchTerm ? encodeURIComponent(searchTerm) : '';
+  
+  try {
+    const response = await fetch(`https://api.artic.edu/api/v1/artworks/search?&q=${searchParam}&fields=image_id,title,description,id&limit=1&page=${rand_image}&has_image=true`);
 
-      const artworkData = artworks[0];
-      currentArtworkData = artworkData;
-      const image = document.getElementById('image');
-      image.src = `https://www.artic.edu/iiif/2/${artworkData.image_id}/full/843,/0/default.jpg`;
-      
-      updateDisplay();
+    if (!response.ok) {
+//403 errors due to page number being to high when using search,
+//  loop with smaller range, 
+//  retry 5 will always be 0 and should be successful return an image
+      if (response.status === 403 && retryCount < 5) {
+        console.log("403 error loop");
+        console.log(retryCount);
+        const newRandImage = getNewImageNum(Math.max(Math.floor(10000 / ((10)**retryCount)), 1));
+        return reloadInfo(newRandImage, searchTerm, retryCount + 1);
+      }
+      throw new Error('Request failed');
+    }
+    
+    const data = await response.json();
+    
+    
+    const artworks = data.data;
+    // occationally the data for a id is empty
+    if (!artworks || artworks.length === 0) {
+      if (retryCount < 6) {
+        console.log(retryCount)
+        const newRandImage = getNewImageNum(Math.max(Math.floor(10000 / ((10)**retryCount)), 1));
+        return reloadInfo(newRandImage, searchTerm, retryCount + 1);
+      } else {
+        throw new Error('No artwork found after multiple attempts');
+      }
+    }
 
-      return data;
-    })
-    .catch(error => {
-      console.error('Error fetching data:', error);
-      document.getElementById('data-container').innerHTML = "<p>Error loading data. Please try again.</p>";
-    });
+    currentArtworkData = artworks[0];
+//gets and sets image source
+    document.getElementById('image').src = `https://www.artic.edu/iiif/2/${currentArtworkData.image_id}/full/843,/0/default.jpg`;
+// Always use artwork display on inital load and when getting new art via search button
+    updateDisplay('artwork'); 
+    return currentArtworkData;
+    
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    document.getElementById('data-container').innerHTML = "<p>Error loading data. Please try again.</p>";
+  }
 }
 
-function updateDisplay() {
-
-  const toggle = document.getElementById('toggle-detail-checkbox'); 
+function updateDisplay(view = 'artwork') {
   const art_titles = document.getElementById('art_title');
   const descriptions = document.getElementById('descript');
-    
-  if (toggle.checked) {
-    console.log('Fetching artist info for ID:', currentArtworkData.id);
+  const toggleLabel = document.getElementById('info-toggle');
+
+  if (view === 'artist') {
+    //get artist inf0 when navigating to the artist tab
+    //dosen't need the same loop error handling as we already proved out that artwork had data
+    toggleLabel.textContent = 'Showing Artist Detail';
     fetch(`https://api.artic.edu/api/v1/artworks/${currentArtworkData.id}?fields=artist_title,artist_display`)
       .then(response => response.json())
       .then(data => {
         const artistData = data.data;
         art_titles.textContent = artistData.artist_title || 'Unknown Artist';
-        descriptions.innerHTML = artistData.artist_display || "<p>No artist information available</p>"
+        descriptions.innerHTML = artistData.artist_display || "<p>No artist information available</p>";
       })
       .catch(error => {
         console.error('Error fetching artist info:', error);
@@ -66,42 +76,32 @@ function updateDisplay() {
         descriptions.innerHTML = "<p>No artist information available</p>";
       });
   } else {
+    //use data from reload function
+    //also used to set back to default when loading new artwork
+    toggleLabel.textContent = 'Showing Artwork Detail';
     art_titles.textContent = currentArtworkData.title || "Unknown Title";
-    descriptions.innerHTML = currentArtworkData.description || "<p>No Description Available</p>"
+    descriptions.innerHTML = currentArtworkData.description || "<p>No Description Available</p>";
   }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-  
-  // Toggle listener
-  const toggle = document.getElementById('toggle-detail-checkbox'); 
-  const toggleLabel = document.getElementById('info-toggle');
-
-  toggle.addEventListener('change', function () {
-      toggleLabel.textContent = toggle.checked ? 'Showing Artist Detail' : 'Showing Artwork Detail';     
-      updateDisplay();
-    });
-    
-  
-  // Form event listener
   const form = document.getElementById('learn-form');
+  //get new artwork listner
   form.addEventListener('submit', function (e) {
-      e.preventDefault();
-      // Reset toggle to reset to art view and so that it dosent preform the second fetch 
-      const toggle = document.getElementById('toggle-detail-checkbox');
-      const toggleLabel = document.getElementById('info-toggle');
-      toggle.checked = false;
-      toggleLabel.textContent = 'Showing Artwork Detail';
-      
-      //Set search and reload
-      const searchTerm = document.getElementById('search-term').value;
-      rand_image = getNewImageNum();
-      reloadInfo(rand_image, searchTerm);
-      console.log(rand_image);
-    });
+    e.preventDefault();
+    const searchTerm = document.getElementById('search-term').value;
+    const rand_image = getNewImageNum();
+    reloadInfo(rand_image, searchTerm);
+  });
+//artist navigation
+  document.getElementById('artist-btn').addEventListener('click', () => {
+    if (currentArtworkData) updateDisplay('artist');
+  });
+//artwork navigation
+  document.getElementById('artwork-btn').addEventListener('click', () => {
+    if (currentArtworkData) updateDisplay('artwork');
+  });
 
-  // Load initial artwork
-  console.log('Loading initial artwork');
-  rand_image = getNewImageNum();
-  reloadInfo(rand_image, '');
+// Load initial artwork
+  reloadInfo(getNewImageNum(), '');
 });
